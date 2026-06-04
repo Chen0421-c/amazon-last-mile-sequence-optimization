@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the Amazon Last Mile cleaning pipeline from a source checkout."""
+"""Backward-compatible wrapper for the dissertation cleaning pipeline."""
 
 from __future__ import annotations
 
