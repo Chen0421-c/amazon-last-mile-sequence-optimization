@@ -17,6 +17,10 @@ env/
 *.json
 *.csv
 *.png
+*.parquet
+*.pkl
+*.joblib
+
 processed_outputs/
 eda_outputs/
 quality_outputs/
