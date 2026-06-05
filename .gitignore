@@ -16,7 +16,14 @@ env/
 # Raw Amazon Last Mile data and generated outputs
 *.json
 *.csv
+*.png
+*.parquet
+*.pkl
+*.joblib
+
 processed_outputs/
+eda_outputs/
+quality_outputs/
 data/
 outputs/
 

@@ -1,3 +1,8 @@
-# Runtime dependencies for the cleaning pipeline.
-# The pipeline intentionally uses only the Python standard library so it can run
-# in constrained Colab/Drive environments without loading large JSON files into memory.
+---
+
+
+```text
+pandas>=2.0
+numpy>=1.23
+matplotlib>=3.7
+pytest>=7.0
