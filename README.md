@@ -204,6 +204,8 @@ This analysis writes CSV and PNG diagnostics under:
 /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/quality_outputs/
 ```
 
+Generated quality CSV/PNG files should stay in Google Drive and are intentionally excluded from GitHub by `.gitignore`.
+
 The second-round outputs include dataset consistency checks, route usability filters, route and package outlier summaries, station/sequence logic checks, dropoff/package checks, feature reliability recommendations, memory-safe travel-time integrity checks, training-ready route recommendations, and diagnostic plots under `quality_outputs/plots/`.
 
 This step verifies whether the cleaned data is reliable enough for EDA and later machine learning. It does not train any model and does not modify raw JSON files.
