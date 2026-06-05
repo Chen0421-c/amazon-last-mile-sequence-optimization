@@ -180,18 +180,45 @@ def dataset_consistency_summary(data: dict[str, pd.DataFrame], output_dir: Path)
 # ---------------------------------------------------------------------------
 
 
+def _to_bool(value: Any) -> bool:
+    """Convert scalar CSV/pandas boolean-like values into a safe bool."""
+
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "y"}
+    try:
+        if pd.isna(value):
+            return False
+    except TypeError:
+        pass
+    return bool(value)
+
+
 def reason_not_usable(row: pd.Series) -> str:
-    if not row["route_exists_in_actual_sequences_bool"]:
+    """Return one single reason label explaining why a route is not usable."""
+
+    if not _to_bool(row.get("route_exists_in_actual_sequences", False)):
         return "missing_actual_sequence"
-    if int(row.get("route_stop_count", 0)) != int(row.get("sequence_stop_count", 0)):
+
+    seq_count = row.get("sequence_stop_count")
+    route_count = row.get("route_stop_count")
+    if pd.notna(seq_count) and pd.notna(route_count) and int(seq_count) != int(route_count):
         return "stop_count_mismatch"
-    if not row["sequence_matches_route_stops_bool"]:
+
+    if not _to_bool(row.get("sequence_matches_route_stops", False)):
         return "stop_id_mismatch"
-    station_count = int(row.get("number_of_station_stops", 0))
+
+    station_count = row.get("number_of_station_stops", 0)
+    if pd.isna(station_count):
+        station_count = 0
+    station_count = int(station_count)
+
     if station_count == 0:
         return "no_station"
     if station_count > 1:
         return "multiple_stations"
+
     return "other"
 
 
@@ -231,16 +258,13 @@ def route_validity_analysis(data: dict[str, pd.DataFrame], output_dir: Path) -> 
     ]
     unusable = merged[~merged["can_use_for_training_bool"]].copy()
     if unusable.empty:
-        # On an empty DataFrame, pandas.DataFrame.apply(axis=1) can return an
-        # empty DataFrame instead of a Series. Write a correctly shaped zero-row
-        # detail file directly so Colab runs do not fail during assignment.
-        unusable_detail = pd.DataFrame(columns=detail_columns)
+        unusable = unusable.copy()
+        unusable["reason_not_usable"] = pd.Series(dtype="object")
     else:
-        # Use an explicit row iteration rather than assigning the raw apply result
-        # so reason_not_usable is always a one-dimensional list of strings.
-        unusable["reason_not_usable"] = [str(reason_not_usable(row)) for _, row in unusable.iterrows()]
-        unusable_detail = unusable[detail_columns]
-    unusable_detail.to_csv(output_dir / "unusable_routes_detail.csv", index=False)
+        unusable = unusable.copy()
+        unusable["reason_not_usable"] = [reason_not_usable(row) for _, row in unusable.iterrows()]
+
+    unusable[detail_columns].to_csv(output_dir / "unusable_routes_detail.csv", index=False)
     return summary, merged
 
 
