@@ -30,7 +30,11 @@ from last_mile_cleaning.clean_pipeline import is_missing, stream_top_level_objec
 DATA_ROOT = Path("/content/drive/MyDrive/dissertation/amazon_last_mile")
 PROCESSED_OUTPUTS = DATA_ROOT / "processed_outputs"
 QUALITY_OUTPUTS = PROCESSED_OUTPUTS / "quality_outputs"
-TRAVEL_TIMES_RELATIVE_PATH = Path("almrrc2021-data-training/model_build_inputs/travel_times.json")
+TRAVEL_TIME_SOURCES = [
+    ("training_build", Path("almrrc2021-data-training/model_build_inputs/travel_times.json")),
+    ("training_apply", Path("almrrc2021-data-training/model_apply_inputs/new_travel_times.json")),
+    ("evaluation_apply", Path("almrrc2021-data-evaluation/model_apply_inputs/eval_travel_times.json")),
+]
 
 ROUTE_OUTLIER_COLUMNS = ["number_of_stops", "number_of_dropoff_stops", "executor_capacity_cm3", "missing_zone_ratio"]
 PACKAGE_OUTLIER_COLUMNS = [
@@ -599,65 +603,107 @@ def extract_travel_time(matrix: Any, from_stop: str, to_stop: str) -> Any:
     return from_row.get(to_stop)
 
 
+def stream_travel_time_sources(
+    data_root: Path, pending_routes: set[str]
+) -> Iterable[tuple[str, str, Any]]:
+    """Stream all known travel-time JSON files and yield route matrices on demand.
+
+    The function scans each source file route-by-route and only yields matrices
+    for route IDs that still need travel-time checks. It never calls
+    ``json.load()`` on a complete travel-time file.
+    """
+
+    for source_label, relative_path in TRAVEL_TIME_SOURCES:
+        if not pending_routes:
+            return
+        travel_path = data_root / relative_path
+        if not travel_path.exists():
+            print(f"WARNING: travel-time source not found for {source_label}: {travel_path}")
+            continue
+        for route_id, matrix in stream_top_level_object(travel_path):
+            if route_id in pending_routes:
+                yield source_label, route_id, matrix
+                pending_routes.remove(route_id)
+                if not pending_routes:
+                    return
+
+
+def _write_transition_travel_time_rows(
+    writer: csv.DictWriter[str],
+    route_id: str,
+    group: pd.DataFrame,
+    matrix: Any,
+    source_label: str,
+) -> tuple[int, list[float]]:
+    missing_count = 0
+    route_time_values: list[float] = []
+    for _, transition in group.iterrows():
+        travel_time = extract_travel_time(matrix, str(transition["from_stop"]), str(transition["to_stop"]))
+        missing = is_missing(travel_time)
+        if missing:
+            missing_count += 1
+        else:
+            route_time_values.append(float(travel_time))
+        writer.writerow(
+            {
+                "route_id": route_id,
+                "from_stop": transition["from_stop"],
+                "to_stop": transition["to_stop"],
+                "position": transition["position"],
+                "travel_time_ij": csv_safe(travel_time),
+                "travel_time_missing": 1 if missing else 0,
+                "travel_time_source": source_label,
+            }
+        )
+    return missing_count, route_time_values
+
+
 def travel_time_integrity_check(
     transitions: pd.DataFrame, data_root: Path, output_dir: Path, max_routes: int | None
 ) -> tuple[pd.DataFrame, dict[str, Any], pd.DataFrame]:
-    """Stream raw travel_times.json route-by-route and check actual transition coverage."""
+    """Stream all travel-time sources route-by-route and check transition coverage."""
 
     route_transition_map = build_transition_route_map(transitions, max_routes)
     pending_routes = set(route_transition_map)
-    travel_path = data_root / TRAVEL_TIMES_RELATIVE_PATH
     detail_path = output_dir / "actual_transition_travel_time_check.csv"
-    fieldnames = ["route_id", "from_stop", "to_stop", "position", "travel_time_ij", "travel_time_missing"]
+    fieldnames = [
+        "route_id",
+        "from_stop",
+        "to_stop",
+        "position",
+        "travel_time_ij",
+        "travel_time_missing",
+        "travel_time_source",
+    ]
     route_rows: list[dict[str, Any]] = []
     all_travel_times: list[float] = []
-    checked_routes: set[str] = set()
+    source_transition_counts = {label: 0 for label, _relative_path in TRAVEL_TIME_SOURCES}
+    source_transition_counts["missing_source"] = 0
 
     with detail_path.open("w", encoding="utf-8", newline="") as file_obj:
         writer = csv.DictWriter(file_obj, fieldnames=fieldnames)
         writer.writeheader()
-        if travel_path.exists():
-            for route_id, matrix in stream_top_level_object(travel_path):
-                if route_id not in pending_routes:
-                    continue
-                checked_routes.add(route_id)
-                group = route_transition_map[route_id]
-                missing_count = 0
-                route_time_values: list[float] = []
-                for _, transition in group.iterrows():
-                    travel_time = extract_travel_time(matrix, str(transition["from_stop"]), str(transition["to_stop"]))
-                    missing = is_missing(travel_time)
-                    if missing:
-                        missing_count += 1
-                    else:
-                        route_time_values.append(float(travel_time))
-                        all_travel_times.append(float(travel_time))
-                    writer.writerow(
-                        {
-                            "route_id": route_id,
-                            "from_stop": transition["from_stop"],
-                            "to_stop": transition["to_stop"],
-                            "position": transition["position"],
-                            "travel_time_ij": csv_safe(travel_time),
-                            "travel_time_missing": 1 if missing else 0,
-                        }
-                    )
-                route_rows.append(
-                    {
-                        "route_id": route_id,
-                        "actual_transition_count_checked": len(group),
-                        "missing_travel_time_count": missing_count,
-                        "has_complete_actual_transition_travel_time": missing_count == 0,
-                    }
-                )
-                pending_routes.remove(route_id)
-                if not pending_routes:
-                    break
-        else:
-            print(f"WARNING: travel_times.json not found at {travel_path}; marking checked transitions as missing.")
 
-        # If route IDs from actual_transitions are not present in travel_times.json,
-        # write their transitions as missing instead of silently dropping them.
+        for source_label, route_id, matrix in stream_travel_time_sources(data_root, pending_routes):
+            group = route_transition_map[route_id]
+            missing_count, route_time_values = _write_transition_travel_time_rows(
+                writer, route_id, group, matrix, source_label
+            )
+            all_travel_times.extend(route_time_values)
+            source_transition_counts[source_label] += len(group)
+            route_rows.append(
+                {
+                    "route_id": route_id,
+                    "actual_transition_count_checked": len(group),
+                    "missing_travel_time_count": missing_count,
+                    "has_complete_actual_transition_travel_time": missing_count == 0,
+                    "travel_time_source": source_label,
+                }
+            )
+
+        # If route IDs from actual_transitions are not present in any travel-time
+        # source, write their transitions as missing instead of silently dropping
+        # them. These rows use the explicit missing_source label.
         for route_id in sorted(pending_routes):
             group = route_transition_map[route_id]
             for _, transition in group.iterrows():
@@ -669,14 +715,17 @@ def travel_time_integrity_check(
                         "position": transition["position"],
                         "travel_time_ij": "",
                         "travel_time_missing": 1,
+                        "travel_time_source": "missing_source",
                     }
                 )
+            source_transition_counts["missing_source"] += len(group)
             route_rows.append(
                 {
                     "route_id": route_id,
                     "actual_transition_count_checked": len(group),
                     "missing_travel_time_count": len(group),
                     "has_complete_actual_transition_travel_time": False,
+                    "travel_time_source": "missing_source",
                 }
             )
 
@@ -697,6 +746,11 @@ def travel_time_integrity_check(
         "max_actual_transition_travel_time": float(values.max()) if len(values) else 0,
     }
     write_single_row_csv(output_dir / "travel_time_integrity_summary.csv", summary)
+
+    print("Transition counts by travel_time_source:")
+    for source_label, count in source_transition_counts.items():
+        print(f"  {source_label}: {count}")
+
     return route_completeness, summary, pd.read_csv(detail_path)
 
 
