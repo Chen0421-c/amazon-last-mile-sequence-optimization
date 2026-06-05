@@ -1,0 +1,29 @@
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Raw Amazon Last Mile data and generated outputs
+*.json
+*.csv
+*.png
+processed_outputs/
+eda_outputs/
+quality_outputs/
+data/
+outputs/
+
+# OS/editor files
+.DS_Store
+.vscode/
+.idea/
