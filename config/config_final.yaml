@@ -4,6 +4,9 @@ project:
   seed_list: [42, 100, 2026, 3001, 5000]
 
 paths:
+  data_root: /content/drive/MyDrive/dissertation/amazon_last_mile
+  processed_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs
+  final_cleaned_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned
   base_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned
 
   route_splits: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/route_splits.csv
@@ -11,11 +14,14 @@ paths:
   validation_route_ids: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/validation_route_ids.csv
   test_route_ids: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/test_route_ids.csv
 
+  routes_summary: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/routes_summary.csv
   stops_base_features: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/stops_base_features.csv
   stop_package_features: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/stop_package_features.csv
+  route_travel_time_source_lookup: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/travel_time_multisource_outputs/route_travel_time_source_lookup.csv
 
   actual_transitions_with_travel_time:
     candidates:
+      - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/actual_transition_travel_time_complete_routes.csv
       - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/actual_transition_travel_time_clean.csv
       - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/actual_transitions_clean.csv
       - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/actual_transitions.csv
@@ -25,6 +31,11 @@ paths:
       - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/travel_time_complete_routes.csv
       - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/complete_travel_time_routes.csv
       - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/complete_route_ids.csv
+
+  travel_time_matrices:
+    training_build: /content/drive/MyDrive/dissertation/amazon_last_mile/almrrc2021-data-training/model_build_inputs/travel_times.json
+    training_apply: /content/drive/MyDrive/dissertation/amazon_last_mile/almrrc2021-data-training/model_apply_inputs/new_travel_times.json
+    evaluation_apply: /content/drive/MyDrive/dissertation/amazon_last_mile/almrrc2021-data-evaluation/model_apply_inputs/eval_travel_times.json
 
 outputs:
   final_base_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/final_experiment_outputs
@@ -44,6 +55,7 @@ pairwise:
   chunk_size_routes: 100
   max_routes_per_split: null
   default_seed: 42
+  parquet_compression: snappy
 
 model:
   models:
@@ -110,13 +122,17 @@ required_columns:
       - stop_id
     optional:
       - zone_id
+      - type
       - stop_type
+      - is_station
+      - is_dropoff
   transition_files:
     required:
       - route_id
       - from_stop
       - to_stop
     optional:
+      - position
       - travel_time
       - travel_time_ij
       - actual_sequence
