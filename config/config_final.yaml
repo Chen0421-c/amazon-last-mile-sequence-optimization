@@ -1,0 +1,122 @@
+project:
+  name: amazon_last_mile_final_experiment
+  stage: final_full_scale_experiment_setup
+  seed_list: [42, 100, 2026, 3001, 5000]
+
+paths:
+  base_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned
+
+  route_splits: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/route_splits.csv
+  train_route_ids: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/train_route_ids.csv
+  validation_route_ids: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/validation_route_ids.csv
+  test_route_ids: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/test_route_ids.csv
+
+  stops_base_features: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/stops_base_features.csv
+  stop_package_features: /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/stop_package_features.csv
+
+  actual_transitions_with_travel_time:
+    candidates:
+      - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/actual_transition_travel_time_clean.csv
+      - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/actual_transitions_clean.csv
+      - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/actual_transitions.csv
+
+  complete_routes:
+    candidates:
+      - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/travel_time_complete_routes.csv
+      - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/complete_travel_time_routes.csv
+      - /content/drive/MyDrive/dissertation/amazon_last_mile/processed_outputs/final_cleaned/complete_route_ids.csv
+
+outputs:
+  final_base_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/final_experiment_outputs
+  pairwise_full_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/final_experiment_outputs/pairwise_samples_full
+  model_full_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/final_experiment_outputs/model_outputs_full
+  subgroup_analysis_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/final_experiment_outputs/subgroup_analysis
+  hybrid_weight_search_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/final_experiment_outputs/hybrid_weight_search
+  route_generation_full_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/final_experiment_outputs/route_generation_full
+  statistical_tests_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/final_experiment_outputs/statistical_tests
+  ablation_study_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/final_experiment_outputs/ablation_study
+  final_tables_figures_dir: /content/drive/MyDrive/dissertation/amazon_last_mile/final_experiment_outputs/final_tables_figures
+  logs: /content/drive/MyDrive/dissertation/amazon_last_mile/final_experiment_outputs/logs
+
+pairwise:
+  negative_samples_per_positive: 5
+  output_format: parquet
+  chunk_size_routes: 100
+  max_routes_per_split: null
+  default_seed: 42
+
+model:
+  models:
+    - logistic_regression
+    - random_forest
+    - xgboost
+    - lightgbm
+    - catboost
+  primary_metric: sampled_top1_accuracy
+  supporting_metrics:
+    - sampled_top3_accuracy
+    - sampled_top5_accuracy
+    - roc_auc
+    - f1
+    - average_precision
+    - log_loss
+
+route_generation:
+  methods:
+    - travel_time_nearest_neighbor
+    - preference_greedy
+    - hybrid_greedy
+    - hybrid_beam_search
+  beam_widths: [3, 5, 10]
+
+hybrid_cost:
+  weights:
+    - travel
+    - preference
+    - zone
+    - time_window
+    - workload
+  constraints:
+    sum_to_one: true
+  grid_search:
+    weight_step: 0.10
+  validation_metrics:
+    - travel_time_ratio
+    - lcs_similarity
+    - same_zone_ratio
+    - position_match_ratio
+
+statistical_testing:
+  seeds: [42, 100, 2026, 3001, 5000]
+  tests:
+    - welch_t_test
+    - cohens_d
+
+required_columns:
+  route_splits:
+    required:
+      - route_id
+      - split
+    optional:
+      - route_score
+  route_id_files:
+    required:
+      - route_id
+    optional:
+      - route_score
+  stop_files:
+    required:
+      - route_id
+      - stop_id
+    optional:
+      - zone_id
+      - stop_type
+  transition_files:
+    required:
+      - route_id
+      - from_stop
+      - to_stop
+    optional:
+      - travel_time
+      - travel_time_ij
+      - actual_sequence
