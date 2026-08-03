@@ -29,7 +29,7 @@ $PY -s -u --version
 $PY -s -u hpc/combine_hybrid_weight_chunks.py \
   --chunk-root "$ROOT" \
   --output-dir "$OUT" \
-  --expected-chunks 8 \
+  --expected-chunks 15 \
   --overwrite
 
 echo "Finished combining hybrid validation 50w chunks"
